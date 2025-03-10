@@ -86,9 +86,6 @@ WORKDIR /app
 # Install git and build-base (gcc, etc.)
 RUN apk add --no-cache git build-base
 
-# Install Air for live reloading
-RUN go install github.com/cosmtrek/air@latest
-
 # Copy go mod and sum files
 COPY go.mod go.sum ./
 
@@ -101,8 +98,37 @@ COPY . .
 # Build the application
 RUN go build -o main ./cmd/server
 
-# Final stage
-FROM alpine:latest
+# Development stage
+FROM golang:1.22-alpine AS development
+
+WORKDIR /app
+
+# Install git and build-base (gcc, etc.)
+RUN apk add --no-cache git build-base
+
+# Install Air for live reloading
+RUN go install github.com/air-verse/air@latest
+
+# Copy go mod and sum files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy the source code
+COPY . .
+
+# Copy Air config
+COPY .air.toml .
+
+# Expose the application port
+EXPOSE 8080
+
+# Use Air for development
+CMD ["air"]
+
+# Production stage
+FROM alpine:latest AS production
 
 WORKDIR /app
 
@@ -111,20 +137,18 @@ RUN apk add --no-cache ca-certificates tzdata
 
 # Copy the binary from builder
 COPY --from=builder /app/main .
-COPY --from=builder /go/bin/air /usr/local/bin/air
-COPY .air.toml .
 
-# Copy migrations and any other necessary files
+# Copy migrations
 COPY internal/db/migrations ./internal/db/migrations
 
 # Set environment variables
-ENV GO_ENV=development
+ENV GO_ENV=production
 
 # Expose the application port
 EXPOSE 8080
 
-# Use Air for development
-CMD ["air"]`
+# Run the compiled binary
+CMD ["./main"]`
 
 	return g.writeFile("Dockerfile", content)
 }
@@ -137,6 +161,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: development  # Use development stage by default
     ports:
       - "8080:8080"
     environment:
@@ -154,6 +179,28 @@ services:
       - postgres
     networks:
       - app-network
+
+  # Production service (commented out by default)
+  # app_prod:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     target: production
+  #   ports:
+  #     - "8081:8080"
+  #   environment:
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #     - DB_USER=postgres
+  #     - DB_PASSWORD=postgres
+  #     - DB_NAME=app_db
+  #     - DB_SSL_MODE=disable
+  #     - JWT_SECRET=your_jwt_secret_here
+  #     - ENVIRONMENT=production
+  #   depends_on:
+  #     - postgres
+  #   networks:
+  #     - app-network
 
   postgres:
     image: postgis/postgis:15-3.3
@@ -305,8 +352,8 @@ sqlc:
 
 # Install tools
 install-tools:
-	go install github.com/cosmtrek/air@latest
-	go install github.com/kyleconroy/sqlc/cmd/sqlc@latest
+	go install github.com/air-verse/air@latest
+	go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest`
 
 	if g.config.IncludeSwagger {
