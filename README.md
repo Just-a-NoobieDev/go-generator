@@ -1,6 +1,33 @@
 # Go Project Generator
 
-A powerful and flexible Go project generator that creates production-ready web applications with clean architecture. Currently supports monolithic architecture only (microservices support planned for future releases).
+A powerful and flexible Go project generator for creating production-ready web applications with clean architecture.
+
+## Features
+
+- Clean Architecture with proper separation of concerns
+- Multiple Router Options:
+  - Chi (lightweight and fast)
+  - Standard library net/http
+  - Gin (feature-rich web framework)
+  - Echo (high performance)
+- Database Options:
+  - PostgreSQL with SQLC (type-safe SQL)
+  - PostgreSQL with GORM (full-featured ORM)
+  - MongoDB (using official Go driver)
+- Optional Features:
+  - JWT Authentication
+  - Redis Caching
+  - WebSocket Support
+  - Swagger Documentation
+  - Test Files
+- Docker and Docker Compose setup
+- Live Reloading with Air
+- Makefile for common operations
+- Environment configuration
+- Structured logging
+- Middleware examples
+- Error handling
+- Clean project layout
 
 ## Installation
 
@@ -8,45 +35,54 @@ A powerful and flexible Go project generator that creates production-ready web a
 go install github.com/Just-a-NoobieDev/go-generator@latest
 ```
 
-## Features
+## Usage
 
-### Architecture
+### Command-Line Interface
 
-- Clean Monolithic Architecture
-- Clear Separation of Concerns
-- Production-Ready Structure
+```bash
+go-generator [flags]
+go-generator [command]
+```
 
-### Router Options
+### Available Commands
 
-- Chi Router (lightweight and fast)
-- Standard library net/http
-- Gin (feature-rich web framework)
-- Echo (high performance, minimalist)
+- `help` - Show help for go-generator
+- `version` - Show go-generator version
 
-### Database Options
+### Flags
 
-- PostgreSQL with SQLC (type-safe SQL)
-- PostgreSQL with GORM (full-featured ORM)
-- MongoDB (using official Go driver)
+```
+-n, --name string      Project name
+-r, --router string    Router type (chi, std, gin, echo)
+-d, --database string  Database type (sqlc, gorm, mongodb)
+-i, --interactive     Interactive mode
+    --ws              Include WebSocket support
+    --jwt             Include JWT authentication
+    --redis           Include Redis support
+    --swagger         Include Swagger documentation
+    --tests           Include test files
+```
 
-### Optional Features
+### Examples
 
-- JWT Authentication
-- Redis Caching
-- WebSocket Support
-- Swagger Documentation
-- Integration and Unit Tests
-- Docker and Docker Compose
-- Live Reloading with Air
-- Graceful Shutdown
-- Structured Logging
-- CORS Middleware
-- Rate Limiting
-- Panic Recovery
+```bash
+# Create a new project with Chi router and SQLC
+go-generator -n myapp -r chi -d sqlc
+
+# Create a new project with Gin, GORM, and additional features
+go-generator -n myapp -r gin -d gorm --jwt --redis --swagger
+
+# Interactive mode
+go-generator -i
+
+# Show help
+go-generator help
+
+# Show version
+go-generator version
+```
 
 ## Project Structure
-
-The generator creates a monolithic application structure that follows clean architecture principles:
 
 ```
 .
@@ -56,21 +92,18 @@ The generator creates a monolithic application structure that follows clean arch
 │   ├── api/            # API layer
 │   │   ├── handlers/   # Request handlers
 │   │   ├── middleware/ # HTTP middleware
-│   │   ├── routes/     # Route definitions
-│   │   └── types/      # Request/Response types
+│   │   └── routes/     # Route definitions
 │   ├── config/         # Configuration
 │   ├── db/            # Database layer
 │   │   ├── migrations/ # Database migrations
 │   │   ├── queries/    # SQL queries (SQLC)
 │   │   └── sqlc/      # Generated SQLC code
-│   ├── domain/        # Domain models and interfaces
+│   ├── domain/        # Domain models
 │   ├── repository/    # Data access layer
 │   └── service/       # Business logic
-├── pkg/
+├── pkg/               # Public packages
 │   └── utils/         # Shared utilities
-└── tests/            # Test suites
-    ├── integration/  # Integration tests
-    └── unit/        # Unit tests
+└── scripts/          # Development scripts
 ```
 
 ## Prerequisites
@@ -79,73 +112,74 @@ The generator creates a monolithic application structure that follows clean arch
 - Docker and Docker Compose
 - Make
 
-## Example Usage
+## Getting Started
 
-```bash
-# Install the generator
-go install github.com/Just-a-NoobieDev/go-generator@latest
+1. Generate a new project:
 
-# Create a new project
-go-generator new myapp \
-  --router chi \
-  --database sqlc \
-  --include-jwt \
-  --include-redis \
-  --include-websocket \
-  --include-swagger \
-  --include-tests
-```
+   ```bash
+   # Using flags
+   go-generator -n myapp -r chi -d sqlc --jwt --redis
+
+   # Or using interactive mode
+   go-generator -i
+   ```
+
+2. Navigate to your project:
+
+   ```bash
+   cd myapp
+   ```
+
+3. Install required tools:
+
+   ```bash
+   make install-tools
+   ```
+
+4. Start the development environment:
+
+   ```bash
+   make docker-up
+   ```
+
+5. Run database migrations:
+
+   ```bash
+   make migrate-up
+   ```
+
+6. Start the application with live reload:
+   ```bash
+   make dev
+   ```
+
+## Available Make Commands
+
+- `make build` - Build the application
+- `make run` - Run the application
+- `make test` - Run tests
+- `make docker-build` - Build Docker images
+- `make docker-up` - Start Docker containers
+- `make docker-down` - Stop Docker containers
+- `make migrate-up` - Run database migrations
+- `make migrate-down` - Rollback database migrations
+- `make dev` - Run with live reload
+- `make sqlc` - Generate SQLC code
+- `make install-tools` - Install required development tools
 
 ## Generated API Example
 
-The generator includes a complete Todo API example that demonstrates:
+The generator creates a complete Todo API with the following endpoints:
 
-1. RESTful endpoints:
-
-   - POST /api/v1/todos - Create a todo
-   - GET /api/v1/todos - List all todos
-   - GET /api/v1/todos/:id - Get a todo by ID
-   - PUT /api/v1/todos/:id - Update a todo
-   - DELETE /api/v1/todos/:id - Delete a todo
-
-2. Database operations with your chosen database:
-
-   - SQLC with type-safe queries
-   - GORM with auto-migrations
-   - MongoDB with proper indexing
-
-3. Optional features:
-   - JWT authentication middleware
-   - Redis caching for improved performance
-   - WebSocket for real-time updates
-   - Swagger documentation
-   - Integration tests
-
-## Getting Started
-
-1. Clone the repository
-2. Run 'make install-tools' to install required tools
-3. Copy '.env.example' to '.env' and update the values
-4. Run 'make docker-up' to start the services
-5. Run 'make migrate-up' to run database migrations
-6. Run 'make dev' to start the development server
-
-## Available Commands
-
-- make build: Build the application
-- make run: Run the application
-- make test: Run tests
-- make docker-up: Start Docker containers
-- make docker-down: Stop Docker containers
-- make migrate-up: Run database migrations
-- make migrate-down: Rollback database migrations
-- make dev: Run with live reload
-- make sqlc: Generate SQLC code
-- make swagger: Generate Swagger documentation
+```
+POST   /api/v1/todos     # Create a new todo
+GET    /api/v1/todos     # List all todos
+GET    /api/v1/todos/:id # Get a specific todo
+PUT    /api/v1/todos/:id # Update a todo
+DELETE /api/v1/todos/:id # Delete a todo
+```
 
 ## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
@@ -155,17 +189,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-MIT
-
-## Roadmap
-
-- [ ] Microservices architecture support
-- [ ] gRPC support
-- [ ] Event-driven architecture patterns
-- [ ] Kubernetes deployment templates
-- [ ] GraphQL API support
-- [ ] More database options
-
-## Notes
-
-This generator currently focuses on monolithic architecture, which is suitable for most small to medium-sized applications. If you need microservices architecture, please check the roadmap for upcoming features.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

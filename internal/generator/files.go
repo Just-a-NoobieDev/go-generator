@@ -12,7 +12,7 @@ func (g *Generator) generateGoMod() error {
 
 go 1.22
 
-require (`, g.config.ModulePath)
+require (`, g.config.Name)
 
 	// Add router-specific dependencies
 	switch g.config.Router {
@@ -1794,7 +1794,7 @@ func (h *TodoHandler) GetByID(c echo.Context) error {
 func (h *TodoHandler) List(c echo.Context) error {
 	todos, err := h.service.ListTodos(c.Request().Context())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 
 	return c.JSON(http.StatusOK, todos)
