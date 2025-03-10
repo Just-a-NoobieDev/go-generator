@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Just-A-NoobieDev/go-generator/internal/generator"
+	"github.com/Just-a-NoobieDev/go-generator/internal/generator"
 )
 
 const helpText = `

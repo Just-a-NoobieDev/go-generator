@@ -33,7 +33,7 @@ A powerful and flexible Go project generator for creating production-ready web a
 
 ```bash
 # Clone the repository
-git clone https://github.com/Just-A-NoobieDev/go-generator.git
+git clone https://github.com/Just-a-NoobieDev/go-generator.git
 
 # Navigate to the project directory
 cd go-generator
@@ -45,7 +45,7 @@ go install ./cmd/go-generator
 Or install directly (after we publish a release):
 
 ```bash
-go install github.com/Just-A-NoobieDev/go-generator/cmd/go-generator@v0.1.0
+go install github.com/Just-a-NoobieDev/go-generator/cmd/go-generator@v0.1.0
 ```
 
 ## Usage

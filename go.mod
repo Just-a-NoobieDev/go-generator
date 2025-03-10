@@ -1,4 +1,4 @@
-module github.com/Just-A-NoobieDev/go-generator
+module github.com/Just-a-NoobieDev/go-generator
 
 go 1.22
 
