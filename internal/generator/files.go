@@ -87,7 +87,7 @@ WORKDIR /app
 RUN apk add --no-cache git build-base
 
 # Install Air for live reloading
-RUN go install github.com/cosmtrek/air@latest
+RUN go install github.com/air-verse/air@latest
 
 # Copy go mod and sum files
 COPY go.mod go.sum ./
@@ -264,6 +264,19 @@ tmp_dir = "tmp"
 func (g *Generator) generateMakefile() error {
 	content := `.PHONY: build run test clean docker-build docker-up docker-down migrate-up migrate-down
 
+# Install required tools
+install-tools:
+	go install github.com/air-verse/air@latest
+	go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest`
+
+	if g.config.IncludeSwagger {
+		content += `
+	go install github.com/swaggo/swag/cmd/swag@latest`
+	}
+
+	content += `
+
 # Go commands
 build:
 	go build -o bin/server ./cmd/server
@@ -302,19 +315,6 @@ dev:
 # SQLC commands
 sqlc:
 	sqlc generate
-
-# Install tools
-install-tools:
-	go install github.com/cosmtrek/air@latest
-	go install github.com/kyleconroy/sqlc/cmd/sqlc@latest
-	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest`
-
-	if g.config.IncludeSwagger {
-		content += `
-	go install github.com/swaggo/swag/cmd/swag@latest`
-	}
-
-	content += `
 
 # Help
 help:
