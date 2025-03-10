@@ -3,6 +3,7 @@ package generator
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 )
 
@@ -107,6 +108,11 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("error generating Todo API files: %v", err)
 	}
 
+	// Execute post-generation commands
+	if err := g.executePostGenerationCommands(); err != nil {
+		return fmt.Errorf("failed to execute post-generation commands: %v", err)
+	}
+
 	fmt.Printf("\nProject %s created successfully!\n", g.config.Name)
 	fmt.Println("\nNext steps:")
 	fmt.Println("1. cd", g.config.Name)
@@ -150,6 +156,38 @@ func (g *Generator) createDirectories() error {
 		if err != nil {
 			return fmt.Errorf("error creating directory %s: %v", dir, err)
 		}
+	}
+
+	return nil
+}
+
+func (g *Generator) executePostGenerationCommands() error {
+	// Change to the project directory
+	err := os.Chdir(g.config.Name)
+	if err != nil {
+		return fmt.Errorf("failed to change to project directory: %v", err)
+	}
+
+	// Initialize git repository
+	if err := exec.Command("git", "init").Run(); err != nil {
+		return fmt.Errorf("failed to initialize git repository: %v", err)
+	}
+
+	// Initialize go module
+	if err := exec.Command("go", "mod", "tidy").Run(); err != nil {
+		return fmt.Errorf("failed to run go mod tidy: %v", err)
+	}
+
+	// Generate SQLC code if using SQLC
+	if g.config.Database == DatabaseSQLC {
+		if err := exec.Command("sqlc", "generate").Run(); err != nil {
+			return fmt.Errorf("failed to generate SQLC code: %v", err)
+		}
+	}
+
+	// Install required tools
+	if err := exec.Command("make", "install-tools").Run(); err != nil {
+		return fmt.Errorf("failed to install tools: %v", err)
 	}
 
 	return nil

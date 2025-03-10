@@ -87,7 +87,7 @@ WORKDIR /app
 RUN apk add --no-cache git build-base
 
 # Install Air for live reloading
-RUN go install github.com/air-verse/air@latest
+RUN go install github.com/cosmtrek/air@latest
 
 # Copy go mod and sum files
 COPY go.mod go.sum ./
@@ -264,19 +264,6 @@ tmp_dir = "tmp"
 func (g *Generator) generateMakefile() error {
 	content := `.PHONY: build run test clean docker-build docker-up docker-down migrate-up migrate-down
 
-# Install required tools
-install-tools:
-	go install github.com/air-verse/air@latest
-	go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest`
-
-	if g.config.IncludeSwagger {
-		content += `
-	go install github.com/swaggo/swag/cmd/swag@latest`
-	}
-
-	content += `
-
 # Go commands
 build:
 	go build -o bin/server ./cmd/server
@@ -315,6 +302,19 @@ dev:
 # SQLC commands
 sqlc:
 	sqlc generate
+
+# Install tools
+install-tools:
+	go install github.com/cosmtrek/air@latest
+	go install github.com/kyleconroy/sqlc/cmd/sqlc@latest
+	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest`
+
+	if g.config.IncludeSwagger {
+		content += `
+	go install github.com/swaggo/swag/cmd/swag@latest`
+	}
+
+	content += `
 
 # Help
 help:
@@ -1198,7 +1198,206 @@ func (h *Handler) writePump(client *Client) {
 	return g.writeFile(filepath.Join("internal", "websocket", "handler.go"), wsHandler)
 }
 
+func (g *Generator) generateResponseUtils() error {
+	content := `package utils
+
+import (
+	"encoding/json"
+	"net/http"
+)
+
+// RespondWithError sends an error response with the specified status code and message
+func RespondWithError(w http.ResponseWriter, code int, message string) {
+	RespondWithJSON(w, code, map[string]string{"error": message})
+}
+
+// RespondWithJSON sends a JSON response with the specified status code and payload
+func RespondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+	response, err := json.Marshal(payload)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(` + "`" + `{"error": "Internal Server Error"}` + "`" + `))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
+}`
+
+	return g.writeFile(filepath.Join("pkg", "utils", "response.go"), content)
+}
+
+func (g *Generator) generateRoutes() error {
+	var content string
+
+	switch g.config.Router {
+	case RouterChi:
+		content = fmt.Sprintf(`package routes
+
+import (
+	"github.com/go-chi/chi/v5"
+	"%s/internal/api/handlers"
+	"%s/internal/api/middleware"
+)
+
+func SetupRoutes(r chi.Router) {
+	// Middleware
+	r.Use(middleware.LoggingMiddleware)
+	r.Use(middleware.RecoveryMiddleware)
+	r.Use(middleware.CORSMiddleware)
+
+	// API routes
+	r.Route("/api/v1", func(r chi.Router) {
+		// Public routes here if any
+		
+		// Protected routes
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.AuthMiddleware)
+			
+			// Todo routes
+			r.Route("/todos", func(r chi.Router) {
+				r.Post("/", handlers.CreateTodo)
+				r.Get("/{id}", handlers.GetTodoByID)
+				r.Get("/", handlers.ListTodos)
+				r.Put("/{id}", handlers.UpdateTodo)
+				r.Delete("/{id}", handlers.DeleteTodo)
+			})
+		})
+	})
+}`, g.config.ModulePath, g.config.ModulePath)
+
+	case RouterGin:
+		content = fmt.Sprintf(`package routes
+
+import (
+	"github.com/gin-gonic/gin"
+	"%s/internal/api/handlers"
+	"%s/internal/api/middleware"
+)
+
+func SetupRoutes(r *gin.Engine) {
+	// Middleware
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
+	r.Use(middleware.CORSMiddleware())
+
+	// API routes
+	v1 := r.Group("/api/v1")
+	{
+		// Public routes here if any
+
+		// Protected routes
+		protected := v1.Group("")
+		protected.Use(middleware.AuthMiddleware())
+		{
+			// Todo routes
+			todos := protected.Group("/todos")
+			{
+				todos.POST("/", handlers.CreateTodo)
+				todos.GET("/:id", handlers.GetTodoByID)
+				todos.GET("/", handlers.ListTodos)
+				todos.PUT("/:id", handlers.UpdateTodo)
+				todos.DELETE("/:id", handlers.DeleteTodo)
+			}
+		}
+	}
+}`, g.config.ModulePath, g.config.ModulePath)
+
+	case RouterEcho:
+		content = fmt.Sprintf(`package routes
+
+import (
+	"github.com/labstack/echo/v4"
+	"%s/internal/api/handlers"
+	"%s/internal/api/middleware"
+)
+
+func SetupRoutes(e *echo.Echo) {
+	// Middleware
+	e.Use(middleware.LoggingMiddleware)
+	e.Use(middleware.RecoveryMiddleware)
+	e.Use(middleware.CORSMiddleware)
+
+	// API routes
+	v1 := e.Group("/api/v1")
+	
+	// Public routes here if any
+
+	// Protected routes
+	protected := v1.Group("")
+	protected.Use(middleware.AuthMiddleware)
+	
+	// Todo routes
+	todos := protected.Group("/todos")
+	todos.POST("", handlers.CreateTodo)
+	todos.GET("/:id", handlers.GetTodoByID)
+	todos.GET("", handlers.ListTodos)
+	todos.PUT("/:id", handlers.UpdateTodo)
+	todos.DELETE("/:id", handlers.DeleteTodo)
+}`, g.config.ModulePath, g.config.ModulePath)
+
+	default: // Standard library
+		content = fmt.Sprintf(`package routes
+
+import (
+	"net/http"
+	"%s/internal/api/handlers"
+	"%s/internal/api/middleware"
+)
+
+func SetupRoutes(mux *http.ServeMux) {
+	// Apply common middleware
+	commonMiddleware := func(next http.Handler) http.Handler {
+		return middleware.LoggingMiddleware(
+			middleware.RecoveryMiddleware(
+				middleware.CORSMiddleware(next),
+			),
+		)
+	}
+
+	// API routes
+	apiHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Protected routes
+		protected := middleware.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Todo routes
+			if r.URL.Path == "/api/v1/todos" || strings.HasPrefix(r.URL.Path, "/api/v1/todos/") {
+				switch r.Method {
+				case http.MethodPost:
+					handlers.CreateTodo(w, r)
+				case http.MethodGet:
+					if r.URL.Path == "/api/v1/todos" {
+						handlers.ListTodos(w, r)
+					} else {
+						handlers.GetTodoByID(w, r)
+					}
+				case http.MethodPut:
+					handlers.UpdateTodo(w, r)
+				case http.MethodDelete:
+					handlers.DeleteTodo(w, r)
+				default:
+					http.NotFound(w, r)
+				}
+				return
+			}
+			http.NotFound(w, r)
+		}))
+
+		protected.ServeHTTP(w, r)
+	})
+
+	// Register routes with middleware
+	mux.Handle("/api/v1/", commonMiddleware(apiHandler))
+}`, g.config.ModulePath, g.config.ModulePath)
+	}
+
+	return g.writeFile(filepath.Join("internal", "api", "routes", "routes.go"), content)
+}
+
 func (g *Generator) generateTodoAPI() error {
+	if err := g.generateResponseUtils(); err != nil {
+		return err
+	}
 	if err := g.generateTodoModel(); err != nil {
 		return err
 	}
@@ -1211,7 +1410,7 @@ func (g *Generator) generateTodoAPI() error {
 	if err := g.generateTodoHandler(); err != nil {
 		return err
 	}
-	if err := g.generateTodoRoutes(); err != nil {
+	if err := g.generateRoutes(); err != nil {
 		return err
 	}
 	if err := g.generateTodoMigration(); err != nil {
@@ -1913,107 +2112,6 @@ func (h *TodoHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	return g.writeFile(filepath.Join("internal", "api", "handlers", "todo.go"), content)
-}
-
-func (g *Generator) generateTodoRoutes() error {
-	var content string
-
-	switch g.config.Router {
-	case RouterChi:
-		content = fmt.Sprintf(`package routes
-
-import (
-	"github.com/go-chi/chi/v5"
-	"%s/internal/api/handlers"
-	"%s/internal/api/middleware"
-)
-
-func SetupTodoRoutes(r chi.Router, h *handlers.TodoHandler) {
-	r.Route("/api/v1/todos", func(r chi.Router) {
-		r.Use(middleware.AuthMiddleware)
-
-		r.Post("/", h.Create)
-		r.Get("/{id}", h.GetByID)
-		r.Get("/", h.List)
-		r.Put("/{id}", h.Update)
-		r.Delete("/{id}", h.Delete)
-	})
-}`, g.config.ModulePath, g.config.ModulePath)
-
-	case RouterGin:
-		content = fmt.Sprintf(`package routes
-
-import (
-	"github.com/gin-gonic/gin"
-	"%s/internal/api/handlers"
-	"%s/internal/api/middleware"
-)
-
-func SetupTodoRoutes(r *gin.Engine, h *handlers.TodoHandler) {
-	v1 := r.Group("/api/v1")
-	todos := v1.Group("/todos")
-	todos.Use(middleware.AuthMiddleware())
-
-	todos.POST("/", h.Create)
-	todos.GET("/:id", h.GetByID)
-	todos.GET("/", h.List)
-	todos.PUT("/:id", h.Update)
-	todos.DELETE("/:id", h.Delete)
-}`, g.config.ModulePath, g.config.ModulePath)
-
-	case RouterEcho:
-		content = fmt.Sprintf(`package routes
-
-import (
-	"github.com/labstack/echo/v4"
-	"%s/internal/api/handlers"
-	"%s/internal/api/middleware"
-)
-
-func SetupTodoRoutes(e *echo.Echo, h *handlers.TodoHandler) {
-	v1 := e.Group("/api/v1")
-	todos := v1.Group("/todos", middleware.AuthMiddleware)
-
-	todos.POST("", h.Create)
-	todos.GET("/:id", h.GetByID)
-	todos.GET("", h.List)
-	todos.PUT("/:id", h.Update)
-	todos.DELETE("/:id", h.Delete)
-}`, g.config.ModulePath, g.config.ModulePath)
-
-	default: // Standard library
-		content = fmt.Sprintf(`package routes
-
-import (
-	"net/http"
-	"%s/internal/api/handlers"
-	"%s/internal/api/middleware"
-)
-
-func SetupTodoRoutes(mux *http.ServeMux, h *handlers.TodoHandler) {
-	todoHandler := middleware.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost:
-			h.Create(w, r)
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/todos":
-			h.List(w, r)
-		case r.Method == http.MethodGet:
-			h.GetByID(w, r)
-		case r.Method == http.MethodPut:
-			h.Update(w, r)
-		case r.Method == http.MethodDelete:
-			h.Delete(w, r)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-
-	mux.Handle("/api/v1/todos/", todoHandler)
-	mux.Handle("/api/v1/todos", todoHandler)
-}`, g.config.ModulePath, g.config.ModulePath)
-	}
-
-	return g.writeFile(filepath.Join("internal", "api", "routes", "todo.go"), content)
 }
 
 func (g *Generator) generateTodoMigration() error {
